@@ -1,0 +1,6 @@
+{
+  "name": "Real-Time Budget Sync",
+  "description": "An interactive personal finance app featuring real-time bank syncing simulation, customizable categories and budgets, interactive SVG spending metrics, smart alerts, and instant notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
