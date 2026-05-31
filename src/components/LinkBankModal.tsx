@@ -4,9 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { X, ShieldAlert, CheckCircle2, Loader2, ArrowRight, Lock, KeyRound } from 'lucide-react';
-import { AVAILABLE_SIMULATED_BANKS } from '../initialData';
-import { BankAccount } from '../types';
+import { X, Lock, Landmark, Check, Loader2, CreditCard, Sparkles } from 'lucide-react';
+import { BankAccount, AccountType } from '../types';
 
 interface LinkBankModalProps {
   isOpen: boolean;
@@ -15,453 +14,321 @@ interface LinkBankModalProps {
   existingAccountIds: string[];
 }
 
-export default function LinkBankModal({ isOpen, onClose, onConnectAccounts, existingAccountIds }: LinkBankModalProps) {
-  const [step, setStep] = useState<'select' | 'credentials' | 'otp' | 'accounts' | 'success'>('select');
-  const [selectedBank, setSelectedBank] = useState<typeof AVAILABLE_SIMULATED_BANKS[0] | null>(null);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-  const [selectedAccountSubIds, setSelectedAccountSubIds] = useState<number[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+const COLOR_ACCENTS = [
+  { id: 'bg-blue-600 border-blue-700', label: 'Blue', bgClass: 'bg-blue-600' },
+  { id: 'bg-indigo-600 border-indigo-700', label: 'Indigo', bgClass: 'bg-indigo-600' },
+  { id: 'bg-emerald-600 border-emerald-700', label: 'Emerald', bgClass: 'bg-emerald-600' },
+  { id: 'bg-teal-600 border-teal-700', label: 'Teal', bgClass: 'bg-teal-600' },
+  { id: 'bg-rose-600 border-rose-700', label: 'Rose', bgClass: 'bg-rose-600' },
+  { id: 'bg-zinc-800 border-zinc-950', label: 'Charcoal', bgClass: 'bg-zinc-800' },
+];
+
+export default function LinkBankModal({ isOpen, onClose, onConnectAccounts }: LinkBankModalProps) {
+  const [bankName, setBankName] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountType, setAccountType] = useState<AccountType>('Checking');
+  const [balance, setBalance] = useState('');
+  const [accountNum, setAccountNum] = useState('');
+  const [selectedColor, setSelectedColor] = useState(COLOR_ACCENTS[0].id);
+  
+  const [isLinking, setIsLinking] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleBankSelect = (bank: typeof AVAILABLE_SIMULATED_BANKS[0]) => {
-    setSelectedBank(bank);
-    setStep('credentials');
-    setErrorMessage('');
-  };
-
-  const handleCredentialsSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username || !password) {
-      setErrorMessage('Please fill in both fields.');
-      return;
-    }
-    setErrorMessage('');
-    setIsSyncing(true);
-    // Simulate API authorization handshake
-    setTimeout(() => {
-      setIsSyncing(false);
-      setStep('otp');
-    }, 1500);
-  };
-
-  const handleOtpSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpCode.length < 4) {
-      setErrorMessage('Please enter a valid 6-digit security code.');
-      return;
-    }
-    setErrorMessage('');
-    setIsSyncing(true);
-    // Simulate OTP lookup verification
-    setTimeout(() => {
-      setIsSyncing(false);
-      setStep('accounts');
-      // Auto select first account
-      setSelectedAccountSubIds([0]);
-    }, 1200);
-  };
-
-  const handleAccountsSubmit = () => {
-    if (selectedAccountSubIds.length === 0) {
-      setErrorMessage('Please select at least one account to link.');
+    if (!bankName.trim() || !accountName.trim() || !balance.trim()) {
+      alert('Please fill in all required fields.');
       return;
     }
 
-    if (!selectedBank) return;
+    const numericBalance = parseFloat(balance.replace(/,/g, ''));
+    if (isNaN(numericBalance)) {
+      alert('Please enter a valid balance representation.');
+      return;
+    }
 
-    setIsSyncing(true);
+    setIsLinking(true);
+
+    // Simulate clean database sync authorize delay
     setTimeout(() => {
-      setIsSyncing(false);
+      setIsLinking(false);
+      setIsSuccess(true);
 
-      const accountsToConnect: BankAccount[] = selectedAccountSubIds.map((idx, subIdx) => {
-        const subAcc = selectedBank.accounts[idx];
-        const randomId = `acct-${selectedBank.id}-${idx}-${Math.floor(Math.random() * 1000)}`;
-        return {
-          id: randomId,
-          bankName: selectedBank.name,
-          accountName: subAcc.name,
-          accountType: subAcc.type as any,
-          accountNumber: subAcc.num,
-          balance: subAcc.bal,
-          lastSynced: new Date().toISOString(),
-          isConnected: true,
-          color: selectedBank.logoColor.includes('blue') 
-            ? 'bg-blue-600 border-blue-700' 
-            : selectedBank.logoColor.includes('green')
-            ? 'bg-emerald-600 border-emerald-700'
-            : selectedBank.logoColor.includes('red')
-            ? 'bg-red-600 border-red-700'
-            : 'bg-teal-600 border-teal-700'
-        };
-      });
+      const formattedNum = accountNum.trim() 
+        ? `•••• ${accountNum.slice(-4)}` 
+        : `•••• ${Math.floor(1000 + Math.random() * 9000)}`;
 
-      onConnectAccounts(accountsToConnect);
-      setStep('success');
-    }, 1500);
+      const newAccount: BankAccount = {
+        id: `acct-user-${Math.random().toString(36).substr(2, 9)}`,
+        bankName: bankName.trim(),
+        accountName: accountName.trim(),
+        accountType,
+        accountNumber: formattedNum,
+        balance: numericBalance,
+        lastSynced: new Date().toISOString(),
+        isConnected: true,
+        color: selectedColor
+      };
+
+      onConnectAccounts([newAccount]);
+    }, 1000);
   };
 
-  const resetFlow = () => {
-    setStep('select');
-    setSelectedBank(null);
-    setUsername('');
-    setPassword('');
-    setOtpCode('');
-    setSelectedAccountSubIds([]);
-    setErrorMessage('');
+  const handleResetClose = () => {
+    setBankName('');
+    setAccountName('');
+    setAccountType('Checking');
+    setBalance('');
+    setAccountNum('');
+    setSelectedColor(COLOR_ACCENTS[0].id);
+    setIsSuccess(false);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity duration-300">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden text-gray-800 flex flex-col max-h-[90vh] animate-scaleUp">
         
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+        {/* Header Title */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2">
-            <Lock className="w-4 h-4 text-emerald-600" id="lock-icon" />
-            <span className="text-xs font-mono text-gray-500 uppercase tracking-widest bg-emerald-50 px-2 py-1 rounded text-emerald-800">
-              Plaid Sandbox Link
-            </span>
+            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+              <Landmark className="w-4 h-4 shrink-0" />
+            </div>
+            <div>
+              <span className="text-xs font-mono text-slate-500 uppercase tracking-widest block font-bold">
+                Connect Pipeline
+              </span>
+              <h3 className="text-sm font-extrabold text-slate-900 tracking-tight leading-none mt-0.5">
+                Link New Bank Account
+              </h3>
+            </div>
           </div>
           <button 
-            onClick={resetFlow}
-            className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
+            onClick={handleResetClose}
+            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-605 transition"
             id="close-modal-btn"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Scrollable Content Container */}
+        {/* Scrollable Content Form */}
         <div className="p-6 overflow-y-auto flex-1">
-          {step === 'select' && (
-            <div className="space-y-4">
-              <div className="text-center space-y-1">
-                <h3 className="text-xl font-semibold tracking-tight text-gray-900">
-                  Select Your Financial Institution
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Secure real-time syncing of transactions using encrypted sandbox protocols.
+          {isSuccess ? (
+            <div className="text-center space-y-5 py-6">
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 flex items-center justify-center rounded-full mx-auto border border-emerald-100 shadow-sm animate-bounce">
+                <Check className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-md font-bold text-slate-900">Bank Account Linked Successfully</h4>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  The {bankName} "{accountName}" pipeline has been fully integrated into your secure ledger.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 pt-2">
-                {AVAILABLE_SIMULATED_BANKS.map(bank => {
-                  const isAlreadyLinked = existingAccountIds.some(id => id.includes(bank.id));
-                  return (
-                    <button
-                      key={bank.id}
-                      onClick={() => handleBankSelect(bank)}
-                      disabled={isSyncing}
-                      className={`flex items-center justify-between p-4 rounded-2xl border text-left transition ${bank.borderColor}`}
-                      id={`bank-select-${bank.id}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${bank.logoColor.replace('text', 'bg')}`} />
-                        <div>
-                          <p className="font-medium text-gray-900">{bank.name}</p>
-                          <p className="text-xs text-gray-400 capitalize">
-                            {bank.accounts.length} account option(s) available
-                          </p>
-                        </div>
-                      </div>
-                      <ArrowRight className="w-4 h-4 text-gray-400" />
-                    </button>
-                  );
-                })}
+              <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl max-w-sm mx-auto text-left text-xs space-y-1.5 font-sans">
+                <div className="flex justify-between">
+                  <span className="text-slate-505 font-medium text-slate-400 uppercase tracking-wider text-[9px] font-mono">Linked Bank:</span>
+                  <span className="font-bold text-slate-800">{bankName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-505 font-medium text-slate-400 uppercase tracking-wider text-[9px] font-mono">Account Nickname:</span>
+                  <span className="font-bold text-slate-800">{accountName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-505 font-medium text-slate-400 uppercase tracking-wider text-[9px] font-mono">Initial Balance:</span>
+                  <span className="font-mono font-bold text-emerald-600">
+                    ${parseFloat(balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-start gap-2.5 p-3.5 bg-sky-50 rounded-2xl border border-sky-100 text-xs text-sky-800 mt-2">
-                <ShieldAlert className="w-4.5 h-4.5 text-sky-600 shrink-0 mt-0.5" />
-                <p className="leading-relaxed">
-                  <strong>Sandbox environment active:</strong> No real bank credentials are required. Try selecting any bank to witness the real-time syncing mechanism.
-                </p>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleResetClose}
+                  className="w-full max-w-sm py-2.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl text-xs transition"
+                  id="success-close-btn"
+                >
+                  Return to Dashboard
+                </button>
               </div>
             </div>
-          )}
-
-          {step === 'credentials' && selectedBank && (
-            <form onSubmit={handleCredentialsSubmit} className="space-y-4">
-              <div className="text-center space-y-1 mb-2">
-                <div className={`w-3 h-3 rounded-full mx-auto mb-2 ${selectedBank.logoColor.replace('text', 'bg')}`} />
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Log in to {selectedBank.name}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  Enter your sandbox testing credentials to authenticate connections.
-                </p>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              
+              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl flex items-center gap-2.5 text-xs text-blue-800 font-medium">
+                <Lock className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>Establish an active connection utilizing manual self-declared balances.</span>
               </div>
 
-              {errorMessage && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-100">
-                  {errorMessage}
+              {/* Form Input Variables */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Bank Name */}
+                <div className="space-y-1">
+                  <label htmlFor="bank-form-name" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Institution / Bank Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="bank-form-name"
+                    type="text"
+                    required
+                    placeholder="e.g. Bank of America"
+                    value={bankName}
+                    onChange={e => setBankName(e.target.value)}
+                    disabled={isLinking}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 rounded-xl bg-slate-50 text-xs text-slate-800 placeholder-slate-400 font-semibold"
+                  />
                 </div>
-              )}
 
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Username / Client ID</label>
+                {/* Account Name */}
+                <div className="space-y-1">
+                  <label htmlFor="acct-form-name" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Account Nickname <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="acct-form-name"
+                    type="text"
+                    required
+                    placeholder="e.g. Travel Card or Checking"
+                    value={accountName}
+                    onChange={e => setAccountName(e.target.value)}
+                    disabled={isLinking}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 rounded-xl bg-slate-50 text-xs text-slate-800 placeholder-slate-400 font-semibold"
+                  />
+                </div>
+
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Account Type */}
+                <div className="space-y-1">
+                  <label htmlFor="acct-form-type" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Account Type <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    id="acct-form-type"
+                    value={accountType}
+                    onChange={e => setAccountType(e.target.value as AccountType)}
+                    disabled={isLinking}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 rounded-xl bg-slate-50 text-xs text-slate-800 font-semibold"
+                  >
+                    <option value="Checking">Checking</option>
+                    <option value="Savings">Savings</option>
+                    <option value="Credit Card">Credit Card</option>
+                    <option value="Brokerage">Brokerage</option>
+                  </select>
+                </div>
+
+                {/* Account Number Last 4 */}
+                <div className="space-y-1">
+                  <label htmlFor="acct-form-num" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Last 4 Digits <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    id="acct-form-num"
+                    type="text"
+                    maxLength={4}
+                    placeholder="e.g. 7482"
+                    value={accountNum}
+                    onChange={e => setAccountNum(e.target.value.replace(/\D/g, ''))}
+                    disabled={isLinking}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 rounded-xl bg-slate-50 text-xs text-slate-800 placeholder-slate-400 font-mono tracking-widest font-semibold"
+                  />
+                </div>
+
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Starting Balance */}
+                <div className="space-y-1">
+                  <label htmlFor="acct-form-bal" className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Starting Balance ($) <span className="text-rose-500">*</span>
+                  </label>
                   <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                     <input
-                      type="text"
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white text-sm"
-                      placeholder="e.g. sandbox_user"
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      disabled={isSyncing}
+                      id="acct-form-bal"
+                      type="number"
+                      step="0.01"
                       required
-                      id="username-input"
+                      placeholder="0.00"
+                      value={balance}
+                      onChange={e => setBalance(e.target.value)}
+                      disabled={isLinking}
+                      className="w-full pl-8 pr-3.5 py-2.5 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-600 focus:border-blue-600 rounded-xl bg-slate-50 text-xs text-slate-800 placeholder-slate-400 font-mono font-bold"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
-                  <input
-                    type="password"
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white text-sm"
-                    placeholder="••••••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    disabled={isSyncing}
-                    required
-                    id="password-input"
-                  />
+                {/* Color Accents Theme Selection */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                    Account Panel Color
+                  </label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {COLOR_ACCENTS.map(color => (
+                      <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => setSelectedColor(color.id)}
+                        disabled={isLinking}
+                        className={`w-6 h-6 rounded-full ${color.bgClass} flex items-center justify-center text-white border transition focus:outline-none ${
+                          selectedColor === color.id 
+                            ? 'ring-2 ring-blue-500 scale-110 border-white' 
+                            : 'border-transparent'
+                        }`}
+                        title={color.label}
+                      >
+                        {selectedColor === color.id && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                
-                <div className="text-[11px] text-gray-400 bg-gray-50 p-2.5 rounded-lg border border-gray-100 flex items-center gap-1.5 font-mono">
-                  <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Any characters are authenticated here to ease previewing.</span>
-                </div>
+
               </div>
 
-              <div className="flex gap-2.5 pt-4">
+              {/* Submit Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setStep('select')}
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium text-gray-600 transition disabled:opacity-50 text-sm"
-                  id="credentials-back-btn"
+                  onClick={handleResetClose}
+                  disabled={isLinking}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-slate-655 text-slate-600 transition disabled:opacity-50 text-xs text-center"
+                  id="link-acct-cancel"
                 >
-                  Back
+                  Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
-                  id="credentials-next-btn"
+                  disabled={isLinking}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-md cursor-pointer transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs text-center"
+                  id="link-acct-submit"
                 >
-                  {isSyncing ? (
+                  {isLinking ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Connecting...
+                      <span>Syncing Connection...</span>
                     </>
                   ) : (
-                    'Connect'
+                    <>
+                      <Sparkles className="w-4.5 h-4.5" />
+                      <span>Establish Pipeline</span>
+                    </>
                   )}
                 </button>
               </div>
+
             </form>
-          )}
-
-          {step === 'otp' && selectedBank && (
-            <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <div className="text-center space-y-1 mb-2">
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 flex items-center justify-center rounded-2xl mx-auto mb-2">
-                  <KeyRound className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Verify Identity
-                </h3>
-                <p className="text-xs text-gray-500">
-                  An SMS containing a 2-factor code has been sent to your simulated device.
-                </p>
-              </div>
-
-              {errorMessage && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-100">
-                  {errorMessage}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1 text-center">Enter 6-Digit SMS Code</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    className="w-full text-center px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-mono text-xl tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white"
-                    placeholder="123456"
-                    value={otpCode}
-                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    disabled={isSyncing}
-                    required
-                    id="otp-input"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-400 text-center">
-                  You can type any 6 digits (e.g. <strong>000000</strong>) in sandbox testing.
-                </p>
-              </div>
-
-              <div className="flex gap-2.5 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setStep('credentials')}
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium text-gray-600 transition disabled:opacity-50 text-sm"
-                  id="otp-back-btn"
-                >
-                  Back
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
-                  id="otp-verify-btn"
-                >
-                  {isSyncing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    'Verify Code'
-                  )}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {step === 'accounts' && selectedBank && (
-            <div className="space-y-4">
-              <div className="text-center space-y-1 mb-2">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Choose Accounts to Sync
-                </h3>
-                <p className="text-xs text-gray-500">
-                  Check which accounts from {selectedBank.name} you want to link.
-                </p>
-              </div>
-
-              {errorMessage && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-100">
-                  {errorMessage}
-                </div>
-              )}
-
-              <div className="space-y-2 pt-1">
-                {selectedBank.accounts.map((acc, idx) => {
-                  const isChecked = selectedAccountSubIds.includes(idx);
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        if (isChecked) {
-                          setSelectedAccountSubIds(selectedAccountSubIds.filter(i => i !== idx));
-                        } else {
-                          setSelectedAccountSubIds([...selectedAccountSubIds, idx]);
-                        }
-                      }}
-                      className={`w-full flex items-center justify-between p-3.5 rounded-xl border text-left transition ${
-                        isChecked 
-                          ? 'border-blue-600 bg-blue-50/20 ring-1 ring-blue-600' 
-                          : 'border-gray-250 hover:border-gray-300'
-                      }`}
-                      id={`select-acct-${idx}`}
-                    >
-                      <div>
-                        <p className="font-semibold text-sm text-gray-900">{acc.name}</p>
-                        <p className="text-xs text-gray-400">{acc.type} • {acc.num}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-medium text-sm text-gray-700">
-                          ${acc.bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </span>
-                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                          isChecked ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'
-                        }`}>
-                          {isChecked && <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20"><path d="M0 11l2-2 5 5L18 3l2 2L7 18z"/></svg>}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-2.5 pt-4">
-                <button
-                  onClick={() => setStep('otp')}
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium text-gray-600 transition disabled:opacity-50 text-sm"
-                  id="accounts-back-btn"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleAccountsSubmit}
-                  disabled={isSyncing}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition disabled:opacity-50 flex items-center justify-center gap-1.5 text-sm"
-                  id="accounts-submit-btn"
-                >
-                  {isSyncing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Authorizing...
-                    </>
-                  ) : (
-                    'Link Selected'
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 'success' && selectedBank && (
-            <div className="text-center space-y-4 py-4">
-              <div className="w-16 h-16 bg-emerald-50 text-emerald-600 flex items-center justify-center rounded-full mx-auto animate-bounce">
-                <CheckCircle2 className="w-10 h-10" />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-xl font-bold text-gray-900">
-                  Bank Account Connected!
-                </h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                  {selectedBank.name} has been securely authorized. Transactions are syncing in real time.
-                </p>
-              </div>
-
-              <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-100 text-left text-xs text-gray-500 space-y-1 max-w-sm mx-auto">
-                <div className="flex justify-between">
-                  <span>Synced accounts:</span>
-                  <span className="font-semibold text-gray-700">{selectedAccountSubIds.length} Linked</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Frequency:</span>
-                  <span className="font-semibold text-gray-700">Real-Time Webhooks</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Security status:</span>
-                  <span className="font-semibold text-emerald-600">Encrypted AES-256</span>
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <button
-                  onClick={resetFlow}
-                  className="w-full max-w-sm py-2.5 bg-gray-900 hover:bg-black text-white font-semibold rounded-xl text-sm transition"
-                  id="success-close-btn"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
           )}
         </div>
+
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ interface PredictedItem {
 }
 
 export default function RecurringPredictor({ transactions, onTriggerReceipt }: RecurringPredictorProps) {
-  const [justSimulated, setJustSimulated] = useState<string | null>(null);
+  const [justPosted, setJustPosted] = useState<string | null>(null);
 
   // Group transactions by description and find the most recent recurring transaction for each
   const recurringMap: Record<string, Transaction> = {};
@@ -77,7 +77,7 @@ export default function RecurringPredictor({ transactions, onTriggerReceipt }: R
     .filter(item => item.daysRemaining <= 30)
     .reduce((sum, item) => sum + item.amount, 0);
 
-  const handleSimulateCharge = (item: PredictedItem) => {
+  const handlePostCharge = (item: PredictedItem) => {
     if (!onTriggerReceipt) return;
 
     onTriggerReceipt({
@@ -93,9 +93,9 @@ export default function RecurringPredictor({ transactions, onTriggerReceipt }: R
       recurringInterval: item.interval,
     });
 
-    setJustSimulated(item.id);
+    setJustPosted(item.id);
     setTimeout(() => {
-      setJustSimulated(null);
+      setJustPosted(null);
     }, 2000);
   };
 
@@ -187,17 +187,17 @@ export default function RecurringPredictor({ transactions, onTriggerReceipt }: R
 
                   {onTriggerReceipt && (
                     <button
-                      onClick={() => handleSimulateCharge(item)}
-                      disabled={justSimulated === item.id}
+                      onClick={() => handlePostCharge(item)}
+                      disabled={justPosted === item.id}
                       className={`p-1.5 rounded-lg border flex items-center justify-center transition disabled:opacity-50 ${
-                        justSimulated === item.id 
+                        justPosted === item.id 
                           ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                           : 'bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-650 border-slate-200 group-hover:border-slate-300'
                       }`}
                       title="Post scheduled billing transaction manually now"
-                      id={`simulate-charge-${item.id}`}
+                      id={`post-charge-${item.id}`}
                     >
-                      {justSimulated === item.id ? (
+                      {justPosted === item.id ? (
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <ChevronRight className="w-3.5 h-3.5" />

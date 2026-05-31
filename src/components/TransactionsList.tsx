@@ -6,15 +6,25 @@
 import React, { useState } from 'react';
 import { Transaction, BankAccount } from '../types';
 import { CATEGORIES } from '../initialData';
-import { Search, Filter, ArrowUpRight, ArrowDownLeft, Plus, Calendar, CreditCard, Tag, Sparkles } from 'lucide-react';
+import { Search, Filter, ArrowUpRight, ArrowDownLeft, Plus, Calendar, CreditCard, Tag, Sparkles, Trash2 } from 'lucide-react';
 
 interface TransactionsListProps {
   transactions: Transaction[];
   accounts: BankAccount[];
   onAddTransaction: (tx: Omit<Transaction, 'id'>) => void;
+  onDeleteTransaction?: (id: string) => void;
+  onClearAllTransactions?: () => void;
+  categories?: string[];
 }
 
-export default function TransactionsList({ transactions, accounts, onAddTransaction }: TransactionsListProps) {
+export default function TransactionsList({ 
+  transactions, 
+  accounts, 
+  onAddTransaction,
+  onDeleteTransaction,
+  onClearAllTransactions,
+  categories = CATEGORIES
+}: TransactionsListProps) {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedAccount, setSelectedAccount] = useState('All');
@@ -22,13 +32,20 @@ export default function TransactionsList({ transactions, accounts, onAddTransact
 
   // Manual transaction inputs
   const [manualDescription, setManualDescription] = useState('');
-  const [manualCategory, setManualCategory] = useState(CATEGORIES[0]);
+  const [manualCategory, setManualCategory] = useState(categories[0] || 'Food & Groceries');
   const [manualAccountId, setManualAccountId] = useState(accounts[0]?.id || '');
   const [manualAmount, setManualAmount] = useState('');
   const [manualType, setManualType] = useState<'income' | 'expense'>('expense');
   const [manualIsRecurring, setManualIsRecurring] = useState(false);
   const [manualRecurringInterval, setManualRecurringInterval] = useState<'weekly' | 'biweekly' | 'monthly'>('monthly');
   const [formError, setFormError] = useState('');
+
+  // Keep manualCategory in sync if categories props change
+  React.useEffect(() => {
+    if (categories.length > 0 && !categories.includes(manualCategory)) {
+      setManualCategory(categories[0]);
+    }
+  }, [categories, manualCategory]);
 
   const handleManualAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,14 +106,26 @@ export default function TransactionsList({ transactions, accounts, onAddTransact
           <h3 className="text-base font-bold text-slate-900">Ledger</h3>
           <p className="text-xs text-slate-500">Showing feed of live synced items and manual ledger logs.</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold text-xs px-3.5 py-2.5 rounded transition-colors flex items-center gap-1.5 shadow-sm"
-          id="toggle-add-tx-form"
-        >
-          <Plus className="w-4 h-4" />
-          Log Expense
-        </button>
+        <div className="flex items-center gap-2">
+          {onClearAllTransactions && transactions.length > 0 && (
+            <button
+              onClick={onClearAllTransactions}
+              className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs px-3 py-2 rounded transition-colors flex items-center gap-1.5"
+              id="clear-ledger-btn"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Ledger</span>
+            </button>
+          )}
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold text-xs px-3.5 py-2.5 rounded transition-colors flex items-center gap-1.5 shadow-sm"
+            id="toggle-add-tx-form"
+          >
+            <Plus className="w-4 h-4" />
+            Log Expense
+          </button>
+        </div>
       </div>
 
       {/* Manual Input Drawer */}
@@ -135,7 +164,7 @@ export default function TransactionsList({ transactions, accounts, onAddTransact
                 onChange={e => setManualCategory(e.target.value)}
                 id="manual-category-field"
               >
-                {CATEGORIES.map(cat => (
+                {categories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
@@ -262,7 +291,7 @@ export default function TransactionsList({ transactions, accounts, onAddTransact
               id="filter-category"
             >
               <option value="All">All Categories</option>
-              {CATEGORIES.map(cat => (
+              {categories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -295,12 +324,13 @@ export default function TransactionsList({ transactions, accounts, onAddTransact
               <th className="p-4 font-bold">Linked Account</th>
               <th className="p-4 font-bold">Timestamp</th>
               <th className="p-4 text-right font-bold">Value</th>
+              {onDeleteTransaction && <th className="p-4 text-center font-bold w-16">Action</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredTxs.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center p-8 text-slate-400 font-medium">
+                <td colSpan={onDeleteTransaction ? 6 : 5} className="text-center p-8 text-slate-400 font-medium">
                   No matching transaction history matches criteria filters. Try syncing or logging a manual detail.
                 </td>
               </tr>
@@ -387,6 +417,20 @@ export default function TransactionsList({ transactions, accounts, onAddTransact
                     }`}>
                       {isExpense ? '-' : '+'}${tx.amount.toFixed(2)}
                     </td>
+
+                    {/* Deletion action button */}
+                    {onDeleteTransaction && (
+                      <td className="p-4 text-center">
+                        <button
+                          onClick={() => onDeleteTransaction(tx.id)}
+                          className="p-1 px-2 text-[10px] text-slate-400 hover:text-red-650 hover:bg-red-50 rounded transition-all focus:outline-none flex items-center justify-center mx-auto"
+                          title="Delete transaction log item"
+                          id={`btn-delete-tx-${tx.id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })

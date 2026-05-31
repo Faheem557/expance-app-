@@ -183,7 +183,7 @@ export default function NotificationReader({
       if (capWords.length > 0) {
         description = capWords.join(' ');
       } else {
-        description = 'Simulated Transaction Feed';
+        description = 'Parsed Alert Transaction';
       }
     }
 

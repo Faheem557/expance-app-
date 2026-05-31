@@ -5,18 +5,38 @@
 
 import React, { useState } from 'react';
 import { Budget } from '../types';
-import { Settings, Pencil, Check, AlertCircle, RefreshCw, Undo2, HelpCircle } from 'lucide-react';
+import { Settings, Pencil, Check, AlertCircle, RefreshCw, Undo2, HelpCircle, Plus } from 'lucide-react';
 
 interface BudgetSummaryProps {
   budgets: Budget[];
   onUpdateBudgetLimit: (category: string, limit: number) => void;
   onResetBudgets: () => void;
+  onCreateCategory?: (categoryName: string, initialLimit: number, color: string) => { success: boolean; message?: string };
 }
 
-export default function BudgetSummary({ budgets, onUpdateBudgetLimit, onResetBudgets }: BudgetSummaryProps) {
+const BEAUTIFUL_COLORS = [
+  { name: 'Blue', value: '#3b82f6' },
+  { name: 'Emerald', value: '#10b981' },
+  { name: 'Amber', value: '#f59e0b' },
+  { name: 'Rose', value: '#f43f5e' },
+  { name: 'Purple', value: '#8b5cf6' },
+  { name: 'Pink', value: '#ec4899' },
+  { name: 'Lime', value: '#84cc16' },
+  { name: 'Cyan', value: '#06b6d4' },
+  { name: 'Orange', value: '#f97316' },
+  { name: 'Slate', value: '#64748b' }
+];
+
+export default function BudgetSummary({ budgets, onUpdateBudgetLimit, onResetBudgets, onCreateCategory }: BudgetSummaryProps) {
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editLimitValue, setEditLimitValue] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Category Form State
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatLimit, setNewCatLimit] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#8b5cf6');
 
   const totalLimit = budgets.reduce((sum, b) => sum + b.limit, 0);
   const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
@@ -39,6 +59,36 @@ export default function BudgetSummary({ budgets, onUpdateBudgetLimit, onResetBud
     setErrorMessage('');
   };
 
+  const handleCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    const trimmedName = newCatName.trim();
+    if (!trimmedName) {
+      setErrorMessage('Please enter a category name');
+      return;
+    }
+
+    const limitNum = parseFloat(newCatLimit || '0');
+    if (isNaN(limitNum) || limitNum < 0) {
+      setErrorMessage('Please enter a valid budget limit');
+      return;
+    }
+
+    if (onCreateCategory) {
+      const result = onCreateCategory(trimmedName, limitNum, newCatColor);
+      if (!result.success) {
+        setErrorMessage(result.message || 'That category already exists');
+        return;
+      }
+    }
+
+    setNewCatName('');
+    setNewCatLimit('');
+    setNewCatColor('#8b5cf6');
+    setShowCreateForm(false);
+  };
+
   return (
     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6 flex flex-col justify-between">
       
@@ -46,19 +96,126 @@ export default function BudgetSummary({ budgets, onUpdateBudgetLimit, onResetBud
         {/* Dynamic Summary Cards */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-slate-900">Envelopes</h3>
+            <h3 className="text-base font-bold text-slate-900">Envelopes & Budgets</h3>
             <p className="text-xs text-slate-500">Configure parameters to monitor active transaction thresholds.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className={`px-2.5 py-1.5 rounded-md border transition-all text-xs font-semibold flex items-center gap-1 ${
+                showCreateForm 
+                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
+                  : 'bg-indigo-650 bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700 hover:border-indigo-700 shadow-sm'
+              }`}
+              title="Create a custom spending category"
+              id="custom-category-trigger-btn"
+            >
+              <Plus className="w-3.5 h-3.5 font-bold" />
+              <span>+ Category</span>
+            </button>
             <button
               onClick={onResetBudgets}
-              className="px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 text-xs font-semibold"
+              className="px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-655 text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 text-xs font-semibold"
               title="Reset to Template Defaults"
               id="reset-budgets-btn"
             >
-              <Undo2 className="w-3 h-3" />
+              <Undo2 className="w-3.5 h-3.5 font-bold" />
               <span>Reset</span>
             </button>
+          </div>
+        </div>
+
+        {/* Custom Category Creation Inline Block */}
+        {showCreateForm && (
+          <form onSubmit={handleCreateSubmit} className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-3 animate-fadeIn">
+            <div className="flex items-center justify-between pb-1.5 border-b border-slate-150">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">
+                Create Custom Envelope
+              </span>
+              <button 
+                type="button" 
+                onClick={() => setShowCreateForm(false)} 
+                className="text-[10px] text-slate-400 hover:text-slate-600 font-bold"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-slate-500 mb-1">
+                  Category Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Gifts & Holidays"
+                  className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  required
+                  id="new-category-name-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-slate-500 mb-1">
+                  Budget Limit ($)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 150"
+                  className="w-full px-2.5 py-1.5 border border-slate-250 bg-white rounded text-xs text-slate-800 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                  value={newCatLimit}
+                  onChange={e => setNewCatLimit(e.target.value)}
+                  min="0"
+                  required
+                  id="new-category-limit-input"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[9px] uppercase font-bold text-slate-500">
+                Accent Theme Color
+              </label>
+              <div className="flex gap-1.5 flex-wrap pt-1">
+                {BEAUTIFUL_COLORS.map(c => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setNewCatColor(c.value)}
+                    className={`w-5 h-5 rounded-full border-2 transition-all ${
+                      newCatColor === c.value 
+                        ? 'border-slate-800 scale-120 shadow-sm' 
+                        : 'border-transparent hover:scale-110'
+                    }`}
+                    style={{ backgroundColor: c.value }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-sm"
+                id="submit-new-category-btn"
+              >
+                Create Envelope
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Dynamic usage instructions to explicitly set budgets */}
+        <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg flex gap-2 text-xs text-indigo-900 leading-relaxed">
+          <HelpCircle className="w-4 h-4 text-indigo-550 text-indigo-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-bold block text-[11.5px] text-indigo-950">How to assign & adjust envelope budgets</span>
+            <p className="text-[11px] text-indigo-850">
+              Simply click the pencil icon <span className="font-bold text-indigo-700">✏️</span> next to any category limit (e.g., Food & Groceries, Transportation) to adjust its value immediately!
+            </p>
           </div>
         </div>
 

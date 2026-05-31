@@ -9,8 +9,7 @@ import {
   INITIAL_ACCOUNTS, 
   INITIAL_TRANSACTIONS, 
   INITIAL_BUDGETS, 
-  CATEGORIES,
-  getRandomTransaction 
+  CATEGORIES 
 } from './initialData';
 
 // Subcomponents import
@@ -28,76 +27,53 @@ import NotificationReader from './components/NotificationReader';
 // Lucide Icons
 import { 
   Activity, 
-  Sparkles, 
-  Cpu, 
-  RefreshCw, 
   BellOff, 
-  Sliders, 
-  Database,
-  ArrowRight,
-  TrendingDown,
-  Lock,
-  Compass
+  Database
 } from 'lucide-react';
 
 export default function App() {
   // Central application states
   const [accounts, setAccounts] = useState<BankAccount[]>(() => {
     const saved = localStorage.getItem('budget_sync_accounts');
-    return saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
+    const list = saved ? JSON.parse(saved) : INITIAL_ACCOUNTS;
+    return list.filter((a: BankAccount) => !['acct-chase-checking', 'acct-chase-savings', 'acct-summit-card'].includes(a.id));
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     const saved = localStorage.getItem('budget_sync_transactions');
-    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    const list = saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    return list.filter((t: Transaction) => !['tx-1', 'tx-2', 'tx-3', 'tx-4', 'tx-5', 'tx-6', 'tx-7', 'tx-8'].includes(t.id));
   });
 
   const [budgets, setBudgets] = useState<Budget[]>(() => {
     const saved = localStorage.getItem('budget_sync_budgets');
-    if (saved) return JSON.parse(saved);
-    
-    // Calculate initial budgets based on default transactions list
-    const defaults = [...INITIAL_BUDGETS];
-    defaults.forEach(b => {
-      const matchSum = INITIAL_TRANSACTIONS
-        .filter(t => t.category === b.category && t.type === 'expense')
-        .reduce((sum, t) => sum + t.amount, 0);
-      b.spent = matchSum;
-    });
-    return defaults;
+    if (saved) {
+      // Re-initialize budgets spent to 0 if we cleaned standard transactions
+      const parsed = JSON.parse(saved) as Budget[];
+      const hasMockTx = localStorage.getItem('budget_sync_transactions') ? 
+        JSON.parse(localStorage.getItem('budget_sync_transactions')!).some((t: any) => ['tx-1', 'tx-2', 'tx-3'].includes(t.id)) : false;
+      if (hasMockTx) {
+        return INITIAL_BUDGETS;
+      }
+      return parsed;
+    }
+    return [...INITIAL_BUDGETS];
   });
 
   const [goals, setGoals] = useState<SavingsGoal[]>(() => {
     const saved = localStorage.getItem('budget_sync_goals');
-    if (saved) return JSON.parse(saved);
-    return [
-      {
-        id: 'goal-emergency',
-        name: 'Emergency Fund',
-        targetAmount: 30000,
-        linkedAccountIds: ['acct-chase-savings'],
-        color: 'emerald',
-        category: 'Emergency Fund',
-        deadline: '2026-12-31'
-      },
-      {
-        id: 'goal-vacation',
-        name: 'Tokyo Dream Holiday',
-        targetAmount: 8000,
-        linkedAccountIds: ['acct-chase-checking'],
-        color: 'sky',
-        category: 'Travel & Holiday',
-        deadline: '2026-10-15'
-      }
-    ];
+    const list = saved ? JSON.parse(saved) : [];
+    return list.filter((g: SavingsGoal) => !['goal-emergency', 'goal-vacation'].includes(g.id));
+  });
+
+  const [categories, setCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('budget_sync_categories');
+    return saved ? JSON.parse(saved) : CATEGORIES;
   });
 
   const [notifications, setNotifications] = useState<Transaction[]>([]);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [activeSyncingId, setActiveSyncingId] = useState<string | null>(null);
-  
-  // Real-time synchronization parameters
-  const [syncSpeed, setSyncSpeed] = useState<'off' | 'fast' | 'normal'>('normal'); // Off, 10s, 25s
   const [isNotificationsMuted, setIsNotificationsMuted] = useState(false);
 
   // Sync state variables to LocalStorage on updates
@@ -116,6 +92,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('budget_sync_goals', JSON.stringify(goals));
   }, [goals]);
+
+  useEffect(() => {
+    localStorage.setItem('budget_sync_categories', JSON.stringify(categories));
+  }, [categories]);
 
   // Recalculates category spending limits dynamically if transaction lists are modified
   const recalcBudgetSpend = (updatedTxs: Transaction[]) => {
@@ -176,40 +156,20 @@ export default function App() {
     }
   };
 
-  // Dynamic automatic background sync generator
-  useEffect(() => {
-    if (syncSpeed === 'off') return;
-
-    const intervalTime = syncSpeed === 'fast' ? 10_000 : 22_000;
-    
-    const triggerBgSync = () => {
-      // Pick random linked account
-      const connected = accounts.filter(a => a.isConnected);
-      if (connected.length === 0) return;
-
-      const randomAcc = connected[Math.floor(Math.random() * connected.length)];
-      const freshTx = getRandomTransaction(randomAcc.id, randomAcc.bankName, randomAcc.accountName);
-      
-      addTransactionPayload(freshTx);
-    };
-
-    const timer = setInterval(triggerBgSync, intervalTime);
-    return () => clearInterval(timer);
-  }, [syncSpeed, accounts, isNotificationsMuted]);
-
   // Manual Account Refresh triggered inside target account card
   const handleSyncAccount = (accountId: string) => {
     setActiveSyncingId(accountId);
 
     setTimeout(() => {
-      // Build dummy synced transaction to display manual verification
-      const targetAcc = accounts.find(a => a.id === accountId);
-      if (targetAcc) {
-        const freshTx = getRandomTransaction(targetAcc.id, targetAcc.bankName, targetAcc.accountName);
-        addTransactionPayload(freshTx);
-      }
+      // Just update last synced timestamp
+      setAccounts(prev => prev.map(acc => {
+        if (acc.id === accountId) {
+          return { ...acc, lastSynced: new Date().toISOString() };
+        }
+        return acc;
+      }));
       setActiveSyncingId(null);
-    }, 1200);
+    }, 1000);
   };
 
   // manual unlink target bank
@@ -226,28 +186,8 @@ export default function App() {
 
   // Handshake connecting new bank channels from Connection wizard
   const handleConnectAccounts = (newAccounts: BankAccount[]) => {
-    // Prevent duplicate ID insertion
     const filteredNews = newAccounts.filter(na => !accounts.some(ea => ea.id === na.id));
     setAccounts(prev => [...prev, ...filteredNews]);
-
-    // Feed introductory simulated greeting transactions
-    setTimeout(() => {
-      newAccounts.forEach(na => {
-        const greetTx: Transaction = {
-          id: `greet-${Math.random().toString(36).substr(2, 9)}`,
-          accountId: na.id,
-          bankName: na.bankName,
-          accountName: na.accountName,
-          amount: 25.00,
-          description: `Authorized Pipeline Handshake`,
-          category: 'Other',
-          date: new Date().toISOString(),
-          type: 'income',
-          isNew: true
-        };
-        addTransactionPayload(greetTx);
-      });
-    }, 1800);
   };
 
   // Core modification for budget categories limits
@@ -269,64 +209,107 @@ export default function App() {
     setGoals(prev => prev.filter(g => g.id !== goalId));
   };
 
+  const handleDeleteTransaction = (id: string) => {
+    const txToDelete = transactions.find(t => t.id === id);
+    if (!txToDelete) return;
+
+    if (confirm(`Remove this transaction ("${txToDelete.description}")? Related budget metrics and account balances will be reversed.`)) {
+      const remainingTxs = transactions.filter(t => t.id !== id);
+      setTransactions(remainingTxs);
+      recalcBudgetSpend(remainingTxs);
+
+      // Adjust the affected bank account balance in reverse
+      setAccounts(prev => {
+        return prev.map(acc => {
+          if (acc.id === txToDelete.accountId) {
+            let updatedBalance = acc.balance;
+            if (txToDelete.type === 'expense') {
+              if (acc.accountType === 'Credit Card') {
+                updatedBalance -= txToDelete.amount;
+              } else {
+                updatedBalance += txToDelete.amount;
+              }
+            } else {
+              // Income
+              if (acc.accountType === 'Credit Card') {
+                updatedBalance += txToDelete.amount;
+              } else {
+                updatedBalance -= txToDelete.amount;
+              }
+            }
+            return {
+              ...acc,
+              balance: Math.max(0, updatedBalance),
+              lastSynced: new Date().toISOString()
+            };
+          }
+          return acc;
+        });
+      });
+    }
+  };
+
+  const handleClearAllTransactions = () => {
+    if (confirm('Clear entire transaction history? Connected financial accounts and savings goals will be preserved.')) {
+      setTransactions([]);
+      recalcBudgetSpend([]);
+    }
+  };
+
+  const handleCreateCategory = (categoryName: string, initialLimit: number = 0, color: string = '#8b5cf6') => {
+    const trimmed = categoryName.trim();
+    if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+      return { success: false, message: 'This category already exists.' };
+    }
+
+    setCategories(prev => [...prev, trimmed]);
+    setBudgets(prev => [
+      ...prev,
+      {
+        category: trimmed,
+        limit: initialLimit,
+        spent: 0,
+        color: color
+      }
+    ]);
+
+    return { success: true };
+  };
+
   // Wipe application back to default initial parameters
   const handleResetToDefaults = () => {
-    if (confirm('Reset bank accounts, transactions lists, and budget envelopes back to default initial state?')) {
+    if (confirm('Clear all accounts, transactions lists, and savings goals?')) {
       localStorage.removeItem('budget_sync_accounts');
       localStorage.removeItem('budget_sync_transactions');
       localStorage.removeItem('budget_sync_budgets');
       localStorage.removeItem('budget_sync_goals');
+      localStorage.removeItem('budget_sync_categories');
       
-      setAccounts(INITIAL_ACCOUNTS);
-      setTransactions(INITIAL_TRANSACTIONS);
+      setAccounts([]);
+      setTransactions([]);
+      setCategories(CATEGORIES);
       
-      const defaults = [...INITIAL_BUDGETS];
-      defaults.forEach(b => {
-        const matchSum = INITIAL_TRANSACTIONS
-          .filter(t => t.category === b.category && t.type === 'expense')
-          .reduce((sum, t) => sum + t.amount, 0);
-        b.spent = matchSum;
-      });
+      const defaults = INITIAL_BUDGETS.map(b => ({ ...b, spent: 0 }));
       setBudgets(defaults);
-      setGoals([
-        {
-          id: 'goal-emergency',
-          name: 'Emergency Fund',
-          targetAmount: 30000,
-          linkedAccountIds: ['acct-chase-savings'],
-          color: 'emerald',
-          category: 'Emergency Fund',
-          deadline: '2026-12-31'
-        },
-        {
-          id: 'goal-vacation',
-          name: 'Tokyo Dream Holiday',
-          targetAmount: 8000,
-          linkedAccountIds: ['acct-chase-checking'],
-          color: 'sky',
-          category: 'Travel & Holiday',
-          deadline: '2026-10-15'
-        }
-      ]);
+      setGoals([]);
       setNotifications([]);
     }
-  };
-
-  // Triggers background simulation immediately for demo purposes
-  const handleTriggerSimulateNow = () => {
-    const connected = accounts.filter(a => a.isConnected);
-    if (connected.length === 0) {
-      alert('Please connect at least one mock bank account from the grid to stream transaction packets!');
-      return;
-    }
-    const randomAcc = connected[Math.floor(Math.random() * connected.length)];
-    const freshTx = getRandomTransaction(randomAcc.id, randomAcc.bankName, randomAcc.accountName);
-    addTransactionPayload(freshTx);
   };
 
   const handleDismissNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
+
+  // --- Dynamic Live Financial Calculations ---
+  const totalAssets = accounts
+    .filter(a => a.accountType !== 'Credit Card')
+    .reduce((sum, a) => sum + a.balance, 0);
+
+  const totalLiabilities = accounts
+    .filter(a => a.accountType === 'Credit Card')
+    .reduce((sum, a) => sum + a.balance, 0);
+
+  const netWorth = totalAssets - totalLiabilities;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 antialiased font-sans flex flex-col justify-between">
@@ -337,74 +320,46 @@ export default function App() {
           
           {/* Logo Identity Title */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-600/20">
+            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
               <Activity className="w-5 h-5" id="app-logo" />
             </div>
             <div>
               <h1 className="text-md font-extrabold tracking-tight text-gray-900 leading-tight">
                 Real-Time Budget Sync
               </h1>
-              <p className="text-[10px] uppercase font-mono tracking-widest text-emerald-600 font-bold flex items-center gap-1">
+              <p className="text-[10px] uppercase font-mono tracking-widest text-emerald-650 font-bold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Live Bank Feed Active
               </p>
             </div>
           </div>
 
-          {/* Simulated API Core Settings Rail */}
-          <div className="flex flex-wrap items-center gap-3 bg-gray-50 border border-gray-150 p-2 rounded-2xl">
-            
-            {/* Simulation Speed Control */}
-            <div className="flex items-center gap-1.5 text-xs px-2.5">
-              <Sliders className="w-3.5 h-3.5 text-gray-400" />
-              <span className="text-gray-500 font-semibold truncate">Feed intervals:</span>
-              <select
-                className="bg-transparent font-bold border-none text-blue-600 focus:outline-none focus:ring-0 cursor-pointer text-xs"
-                value={syncSpeed}
-                onChange={e => setSyncSpeed(e.target.value as any)}
-                id="sync-interval-select"
-              >
-                <option value="normal">Normal (22s)</option>
-                <option value="fast">Rapid (10s)</option>
-                <option value="off">Off (Manual)</option>
-              </select>
-            </div>
-
-            <div className="border-l border-gray-200 h-4" />
-
-            {/* Force instant simulation trigger button */}
-            <button
-              onClick={handleTriggerSimulateNow}
-              className="bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 hover:text-blue-600 px-3 py-1.5 rounded-xl text-[10px] font-bold flex items-center gap-1.5 transition whitespace-nowrap"
-              id="simulate-sync-instant-btn"
-              title="Inject random mock transaction straight from your connected sandbox account"
-            >
-              <RefreshCw className="w-3 h-3 text-emerald-500 animate-spin" />
-              Inject Handshake
-            </button>
-
+          {/* Core App Actions */}
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Notifications sound / alert toggle */}
             <button
               onClick={() => setIsNotificationsMuted(!isNotificationsMuted)}
-              className={`p-1.5 rounded-lg border transition ${
+              className={`py-2 px-3 text-xs font-semibold rounded-xl border flex items-center gap-1.5 transition-all ${
                 isNotificationsMuted 
-                  ? 'bg-red-50 text-red-650 border-red-100' 
-                  : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-500'
+                  ? 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100' 
+                  : 'bg-white hover:bg-gray-100 border-gray-250 text-gray-600'
               }`}
               id="mute-notif-btn"
-              title={isNotificationsMuted ? 'Mute active' : 'Notifications on'}
+              title={isNotificationsMuted ? 'Muted' : 'Sound Alerts Enabled'}
             >
               <BellOff className="w-3.5 h-3.5" />
+              <span>{isNotificationsMuted ? 'Alerts Muted' : 'Alerts Active'}</span>
             </button>
 
             {/* Clear Database resets */}
             <button
               onClick={handleResetToDefaults}
-              className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-red-700 hover:bg-red-50 transition"
+              className="py-2 px-3 text-xs font-semibold rounded-xl bg-white border border-gray-250 text-gray-500 hover:text-red-700 hover:bg-red-50 transition-all flex items-center gap-1.5 focus:outline-none"
               id="wipe-db-btn"
-              title="Wipe sandbox storage memory back to factory settings"
+              title="Clear all stored transactions and linked accounts"
             >
               <Database className="w-3.5 h-3.5" />
+              <span>Clear Dashboard</span>
             </button>
           </div>
 
@@ -456,7 +411,11 @@ export default function App() {
             <BudgetSummary
               budgets={budgets}
               onUpdateBudgetLimit={handleUpdateBudgetLimit}
-              onResetBudgets={() => setBudgets(INITIAL_BUDGETS)}
+              onResetBudgets={() => {
+                setBudgets(INITIAL_BUDGETS.map(b => ({ ...b, spent: 0 })));
+                setCategories(CATEGORIES);
+              }}
+              onCreateCategory={handleCreateCategory}
             />
             <RecurringPredictor
               transactions={transactions}
@@ -499,12 +458,28 @@ export default function App() {
               };
               addTransactionPayload(fullTx);
             }}
+            onDeleteTransaction={handleDeleteTransaction}
+            onClearAllTransactions={handleClearAllTransactions}
+            categories={categories}
           />
         </section>
 
       </main>
 
-      {/* Integrated Connection wizard modal */}
+      {/* Humble Footer */}
+      <footer className="bg-white border-t border-gray-150 py-4 px-6 mt-8">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center text-xs text-gray-400 gap-2">
+          <span>Real-Time Budget Sync © 2026. All data is securely stored locally.</span>
+          <div className="flex gap-4 font-medium text-gray-400">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Secure Gateway Connected
+            </span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Connection wizard modal */}
       <LinkBankModal
         isOpen={isLinkModalOpen}
         onClose={() => setIsLinkModalOpen(false)}
@@ -517,17 +492,6 @@ export default function App() {
         notifications={notifications}
         onDismiss={handleDismissNotification}
       />
-
-      {/* Humble Footer */}
-      <footer className="bg-white border-t border-gray-150 py-4 px-6 mt-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center text-xs text-gray-400 gap-2">
-          <span>Real-Time Budget Sync Corp © 2026. AES-256 secure storage engine.</span>
-          <div className="flex gap-4">
-            <span>Server Sync Latency: <strong className="text-emerald-500">12ms (Nominal)</strong></span>
-            <span>API Handshake Protocol: <strong className="text-blue-600">v3.54</strong></span>
-          </div>
-        </div>
-      </footer>
 
     </div>
   );
