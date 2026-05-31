@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { BankAccount, Transaction, Budget, SavingsGoal } from './types';
+import { BankAccount, Transaction, Budget, SavingsGoal, Loan } from './types';
 import { 
   INITIAL_ACCOUNTS, 
   INITIAL_TRANSACTIONS, 
@@ -23,6 +23,7 @@ import SyncNotification from './components/SyncNotification';
 import RecurringPredictor from './components/RecurringPredictor';
 import GoalsTracker from './components/GoalsTracker';
 import NotificationReader from './components/NotificationReader';
+import LoanTracker from './components/LoanTracker';
 
 // Lucide Icons
 import { 
@@ -71,10 +72,16 @@ export default function App() {
     return saved ? JSON.parse(saved) : CATEGORIES;
   });
 
+  const [loans, setLoans] = useState<Loan[]>(() => {
+    const saved = localStorage.getItem('budget_sync_loans');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [notifications, setNotifications] = useState<Transaction[]>([]);
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [activeSyncingId, setActiveSyncingId] = useState<string | null>(null);
   const [isNotificationsMuted, setIsNotificationsMuted] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
 
   // Sync state variables to LocalStorage on updates
   useEffect(() => {
@@ -96,6 +103,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('budget_sync_categories', JSON.stringify(categories));
   }, [categories]);
+
+  useEffect(() => {
+    localStorage.setItem('budget_sync_loans', JSON.stringify(loans));
+  }, [loans]);
 
   // Recalculates category spending limits dynamically if transaction lists are modified
   const recalcBudgetSpend = (updatedTxs: Transaction[]) => {
@@ -190,6 +201,99 @@ export default function App() {
     setAccounts(prev => [...prev, ...filteredNews]);
   };
 
+  // Update an existing connected account's details
+  const handleUpdateAccount = (updatedAccount: BankAccount) => {
+    setAccounts(prev => prev.map(a => a.id === updatedAccount.id ? updatedAccount : a));
+    
+    // Proactively update bankName and accountName for transactions attached to this account
+    setTransactions(prev => prev.map(t => {
+      if (t.accountId === updatedAccount.id) {
+        return {
+          ...t,
+          bankName: updatedAccount.bankName,
+          accountName: updatedAccount.accountName
+        };
+      }
+      return t;
+    }));
+  };
+
+  // Process manual money transfer between two connected bank accounts
+  const handleAccountTransfer = (fromAccountId: string, toAccountId: string, amount: number, note?: string) => {
+    const fromAcc = accounts.find(a => a.id === fromAccountId);
+    const toAcc = accounts.find(a => a.id === toAccountId);
+    if (!fromAcc || !toAcc) {
+      return { success: false, message: 'Source or destination account was not found.' };
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // From account transaction (expense)
+    const fromTx: Transaction = {
+      id: `tx-tf-out-${Math.random().toString(36).substr(2, 9)}`,
+      accountId: fromAccountId,
+      bankName: fromAcc.bankName,
+      accountName: fromAcc.accountName,
+      amount,
+      description: `Transfer to ${toAcc.bankName} (${toAcc.accountName})${note ? ` - ${note}` : ''}`,
+      category: 'Other',
+      date: timestamp,
+      type: 'expense'
+    };
+
+    // To account transaction (income)
+    const toTx: Transaction = {
+      id: `tx-tf-in-${Math.random().toString(36).substr(2, 9)}`,
+      accountId: toAccountId,
+      bankName: toAcc.bankName,
+      accountName: toAcc.accountName,
+      amount,
+      description: `Transfer from ${fromAcc.bankName} (${fromAcc.accountName})${note ? ` - ${note}` : ''}`,
+      category: 'Other',
+      date: timestamp,
+      type: 'income'
+    };
+
+    // Adjust balances
+    setAccounts(prev => prev.map(acc => {
+      let updatedBalance = acc.balance;
+      if (acc.id === fromAccountId) {
+        if (acc.accountType === 'Credit Card') {
+          updatedBalance += amount;
+        } else {
+          updatedBalance -= amount;
+        }
+        return {
+          ...acc,
+          balance: Math.max(0, updatedBalance),
+          lastSynced: timestamp
+        };
+      }
+      if (acc.id === toAccountId) {
+        if (acc.accountType === 'Credit Card') {
+          updatedBalance -= amount;
+        } else {
+          updatedBalance += amount;
+        }
+        return {
+          ...acc,
+          balance: Math.max(0, updatedBalance),
+          lastSynced: timestamp
+        };
+      }
+      return acc;
+    }));
+
+    // Record both legs of the transfer in the ledger
+    setTransactions(prev => {
+      const updated = [fromTx, toTx, ...prev];
+      recalcBudgetSpend(updated);
+      return updated;
+    });
+
+    return { success: true };
+  };
+
   // Core modification for budget categories limits
   const handleUpdateBudgetLimit = (category: string, limit: number) => {
     setBudgets(prev => {
@@ -276,6 +380,88 @@ export default function App() {
     return { success: true };
   };
 
+  const handleAddLoan = (loanData: Omit<Loan, 'id'>) => {
+    const newLoan: Loan = {
+      ...loanData,
+      id: `loan-${Math.random().toString(36).substr(2, 9)}`
+    };
+
+    // Reflect the initial transaction in the bank account balance
+    if (newLoan.accountId) {
+      setAccounts(prev => prev.map(acc => {
+        if (acc.id === newLoan.accountId) {
+           const isCredit = acc.accountType === 'Credit Card';
+           let updated = acc.balance;
+           if (newLoan.type === 'lent') {
+             // Lending money means balance decreases (or credit increases)
+             updated = isCredit ? updated + newLoan.amount : updated - newLoan.amount;
+           } else {
+             // Borrowing money means balance increases (or credit decreases)
+             updated = isCredit ? updated - newLoan.amount : updated + newLoan.amount;
+           }
+           return { ...acc, balance: Math.max(0, updated) };
+        }
+        return acc;
+      }));
+    }
+
+    setLoans(prev => [...prev, newLoan]);
+  };
+
+  const handleUpdateLoanStatus = (id: string, status: 'active' | 'settled') => {
+    setLoans(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+  };
+
+  const handleAddLoanPayment = (loanId: string, paymentAmount: number, accountId?: string, notes?: string) => {
+    const newPayment = {
+      id: `pay-${Math.random().toString(36).substr(2, 9)}`,
+      amount: paymentAmount,
+      date: new Date().toISOString(),
+      notes,
+      accountId
+    };
+    
+    // Find loan first
+    const targetLoan = loans.find(l => l.id === loanId);
+    if (!targetLoan) return;
+
+    if (accountId) {
+      setAccounts(prev => prev.map(acc => {
+         if (acc.id === accountId) {
+            const isCredit = acc.accountType === 'Credit Card';
+            let updated = acc.balance;
+            if (targetLoan.type === 'lent') {
+               // Being paid back: balance increases (or credit decreases)
+               updated = isCredit ? updated - paymentAmount : updated + paymentAmount;
+            } else {
+               // Paying back: balance decreases (or credit increases)
+               updated = isCredit ? updated + paymentAmount : updated - paymentAmount;
+            }
+            return { ...acc, balance: Math.max(0, updated) };
+         }
+         return acc;
+      }));
+    }
+    
+    setLoans(prev => prev.map(l => {
+      if (l.id === loanId) {
+        const currentPayments = l.payments || [];
+        const newPayments = [...currentPayments, newPayment];
+        
+        // Auto mark as settled if fully paid
+        const totalPaid = newPayments.reduce((sum, p) => sum + p.amount, 0);
+        const newStatus = totalPaid >= l.amount ? 'settled' : l.status;
+        
+        return { ...l, payments: newPayments, status: newStatus };
+      }
+      return l;
+    }));
+  };
+
+  const handleDeleteLoan = (id: string) => {
+    setLoans(prev => prev.filter(l => l.id !== id));
+  };
+
   // Wipe application back to default initial parameters
   const handleResetToDefaults = () => {
     if (confirm('Clear all accounts, transactions lists, and savings goals?')) {
@@ -284,10 +470,12 @@ export default function App() {
       localStorage.removeItem('budget_sync_budgets');
       localStorage.removeItem('budget_sync_goals');
       localStorage.removeItem('budget_sync_categories');
+      localStorage.removeItem('budget_sync_loans');
       
       setAccounts([]);
       setTransactions([]);
       setCategories(CATEGORIES);
+      setLoans([]);
       
       const defaults = INITIAL_BUDGETS.map(b => ({ ...b, spent: 0 }));
       setBudgets(defaults);
@@ -375,7 +563,15 @@ export default function App() {
             accounts={accounts}
             onSyncAccount={handleSyncAccount}
             onUnlinkAccount={handleUnlinkAccount}
-            onOpenLinkModal={() => setIsLinkModalOpen(true)}
+            onOpenLinkModal={() => {
+              setEditingAccount(null);
+              setIsLinkModalOpen(true);
+            }}
+            onEditAccount={(acc) => {
+              setEditingAccount(acc);
+              setIsLinkModalOpen(true);
+            }}
+            onTransfer={handleAccountTransfer}
             activeSyncingId={activeSyncingId}
           />
         </section>
@@ -445,6 +641,18 @@ export default function App() {
           />
         </section>
 
+        {/* Module 3.5: Loan & Debt Tracker */}
+        <section id="loan-tracker-panel">
+          <LoanTracker
+            loans={loans}
+            accounts={accounts}
+            onAddLoan={handleAddLoan}
+            onUpdateLoanStatus={handleUpdateLoanStatus}
+            onDeleteLoan={handleDeleteLoan}
+            onAddPayment={handleAddLoanPayment}
+          />
+        </section>
+
         {/* Module Four: Detailed Logging Spreadsheet list */}
         <section id="ledger-pane">
           <TransactionsList
@@ -482,8 +690,13 @@ export default function App() {
       {/* Connection wizard modal */}
       <LinkBankModal
         isOpen={isLinkModalOpen}
-        onClose={() => setIsLinkModalOpen(false)}
+        onClose={() => {
+          setIsLinkModalOpen(false);
+          setEditingAccount(null);
+        }}
         onConnectAccounts={handleConnectAccounts}
+        onUpdateAccount={handleUpdateAccount}
+        editingAccount={editingAccount}
         existingAccountIds={accounts.map(a => a.id)}
       />
 

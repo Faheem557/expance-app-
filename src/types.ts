@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type AccountType = 'Checking' | 'Savings' | 'Credit Card' | 'Brokerage';
+export type AccountType = 'Checking' | 'Savings' | 'Credit Card' | 'Brokerage' | 'Cash Wallet' | 'Transit Pass';
+
+export type InstitutionType = 'Cash' | 'Bank Card' | 'BRT Card' | 'Bank Account';
 
 export interface BankAccount {
   id: string;
@@ -15,6 +17,10 @@ export interface BankAccount {
   lastSynced: string; // ISO string
   isConnected: boolean;
   color: string; // Hex or tailwind class
+  iban?: string;
+  institutionType?: InstitutionType;
+  cardPhysicality?: 'Physical' | 'Virtual';
+  cardNumber?: string;
 }
 
 export interface Transaction {
@@ -56,5 +62,26 @@ export interface SavingsGoal {
   color: string; // Tailwind color class e.g., 'blue', 'emerald', 'amber', 'rose', 'indigo'
   category: string; // category classification tag
   deadline?: string; // Target complete date (YYYY-MM-DD or ISO)
+}
+
+export interface LoanPayment {
+  id: string;
+  amount: number;
+  date: string;
+  notes?: string;
+  accountId?: string;
+}
+
+export interface Loan {
+  id: string;
+  type: 'lent' | 'borrowed';
+  personName: string;
+  amount: number;
+  dateIssued: string;
+  dueDate: string;
+  status: 'active' | 'settled';
+  notes?: string;
+  payments?: LoanPayment[]; // Array of payments made over time
+  accountId?: string; // Account used for initial transaction
 }
 
