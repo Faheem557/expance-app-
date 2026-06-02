@@ -39,11 +39,13 @@ export interface Transaction {
 }
 
 export interface Budget {
+  id?: number;
   category: string;
   limit: number;
   spent: number;
   color: string;
 }
+
 
 export interface BankSyncLog {
   id: string;

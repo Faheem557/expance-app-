@@ -4,8 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { useAuthContext } from '../context/AuthContext';
 import LinkBankModal from '../components/LinkBankModal';
 import SyncNotification from '../components/SyncNotification';
 import {
@@ -24,6 +25,7 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
+  LogOut,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -53,6 +55,8 @@ export default function AppLayout() {
     setEditingAccount,
     setIsNotificationsMuted,
   } = useAppContext();
+  const { logout, user } = useAuthContext();
+  const navigate = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
@@ -176,6 +180,17 @@ export default function AppLayout() {
           >
             <Database className="w-4 h-4" />
             Clear Dashboard
+          </button>
+          
+          <button
+            onClick={async () => {
+              await logout();
+              navigate('/login');
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:bg-red-50 hover:text-red-600 transition-all mt-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out {user && `(${user.name})`}
           </button>
         </div>
       </aside>
